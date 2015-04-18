@@ -44,7 +44,7 @@ MEMORY
 }
 
 /* The stack size used by the application. NOTE: you need to adjust  */
-STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : 0x400 ;
+STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : 0x200 ;
 
 
 /* Section Definitions */
