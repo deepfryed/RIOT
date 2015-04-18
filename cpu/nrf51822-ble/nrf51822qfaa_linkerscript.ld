@@ -44,7 +44,7 @@ MEMORY
 }
 
 /* The stack size used by the application. NOTE: you need to adjust  */
-STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : 0x200 ;
+STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : 0x400 ;
 
 
 /* Section Definitions */
@@ -142,11 +142,6 @@ SECTIONS
         . = ALIGN(8);
         _estack = .;
     } > ram
-
-    .cca :
-    {
-        KEEP(*(.cca))
-    } > cca
 
     /* heap section */
     . = ALIGN(4);
