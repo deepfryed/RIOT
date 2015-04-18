@@ -1,5 +1,5 @@
 # define the cpu used by the blefriend-nrf51822 board
-export CPU = nrf51822
+export CPU = nrf51822-ble
 export CPU_MODEL = nrf51822qfaa
 
 #define the default port depending on the host OS
@@ -35,6 +35,7 @@ CPU_USAGE = -mcpu=cortex-m0
 FPU_USAGE =
 export CFLAGS += -ggdb -g3 -std=gnu99 -Os -Wall -Wstrict-prototypes $(CPU_USAGE) $(FPU_USAGE) -mlittle-endian -mthumb -mno-thumb-interwork -nostartfiles
 export CFLAGS += -ffunction-sections -fdata-sections -fno-builtin
+export CFLAGS += -DNRF51 -DBLE_STACK_SUPPORT_REQD -DS110 -DSOFTDEVICE_PRESENT -I$(RIOTCPU)/$(CPU)/softdevice/include
 export ASFLAGS += -ggdb -g3 $(CPU_USAGE) $(FPU_USAGE) -mlittle-endian
 export LINKFLAGS += -g3 -ggdb -std=gnu99 $(CPU_USAGE) $(FPU_USAGE) -mlittle-endian -static -lgcc -mthumb -mno-thumb-interwork -nostartfiles
 # $(LINKERSCRIPT) is specified in cpu/Makefile.include
