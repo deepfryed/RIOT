@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Ludwig Ortmann <ludwig.ortmann@fu-berlin.de>
+ * Copyright (C) 2014 Ludwig Knüpfer <ludwig.knuepfer@fu-berlin.de>
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -10,10 +10,10 @@
  * @ingroup     core_util
  * @{
  *
- * @file        reboot.c
+ * @file
  * @brief       Reboot function
  *
- * @author      Ludwig Ortmann <ludwig.ortmann@fu-berlin.de
+ * @author      Ludwig Knüpfer <ludwig.knuepfer@fu-berlin.de
  *
  * @}
  */

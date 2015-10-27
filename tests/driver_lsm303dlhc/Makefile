@@ -4,14 +4,14 @@ include ../Makefile.tests_common
 FEATURES_REQUIRED = periph_i2c
 
 # Define default pin mappings for some boards:
-ifneq (,$(filter iot-lab_M3,$(BOARD)))
+ifneq (,$(filter iotlab-m3,$(BOARD)))
   export TEST_LSM303DLHC_MAG_ADDR=30
   export TEST_LSM303DLHC_ACC_ADDR=25
   export TEST_LSM303DLHC_I2C ?=I2C_0
 endif
 
 USEMODULE += lsm303dlhc
-USEMODULE += vtimer
+USEMODULE += xtimer
 
 ifneq (,$(TEST_LSM303DLHC_I2C))
   CFLAGS += -DTEST_LSM303DLHC_I2C=$(TEST_LSM303DLHC_I2C)
@@ -35,13 +35,13 @@ ifneq (,$(TEST_LSM303DLHC_ACC_PIN))
   CFLAGS += -DTEST_LSM303DLHC_ACC_PIN=$(TEST_LSM303DLHC_ACC_PIN)
 else
   # set random default
-  CFLAGS += -DTEST_LSM303DLHC_ACC_PIN=GPIO_0
+  CFLAGS += -DTEST_LSM303DLHC_ACC_PIN=GPIO_PIN\(0,0\)
 endif
 ifneq (,$(TEST_LSM303DLHC_MAG_PIN))
   CFLAGS += -DTEST_LSM303DLHC_MAG_PIN=$(TEST_LSM303DLHC_MAG_PIN)
 else
   # set random default
-  CFLAGS += -DTEST_LSM303DLHC_MAG_PIN=GPIO_1
+  CFLAGS += -DTEST_LSM303DLHC_MAG_PIN=GPIO_PIN\(0,1\)
 endif
 
 include $(RIOTBASE)/Makefile.include

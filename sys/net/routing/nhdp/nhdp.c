@@ -18,9 +18,10 @@
  * @}
  */
 
+#include "conn/udp.h"
 #include "msg.h"
 #include "netapi.h"
-#include "net/ng_netif.h"
+#include "net/gnrc/netif.h"
 #include "thread.h"
 #include "utlist.h"
 #include "mutex.h"
@@ -35,6 +36,10 @@
 #include "nhdp_writer.h"
 #include "nhdp_reader.h"
 
+#ifndef MODULE_CONN_UDP
+#error "nhdp needs a conn_udp implementation to work"
+#endif
+
 char nhdp_stack[NHDP_STACK_SIZE];
 char nhdp_rcv_stack[NHDP_STACK_SIZE];
 
@@ -42,10 +47,14 @@ char nhdp_rcv_stack[NHDP_STACK_SIZE];
 static kernel_pid_t nhdp_pid = KERNEL_PID_UNDEF;
 static kernel_pid_t nhdp_rcv_pid = KERNEL_PID_UNDEF;
 static kernel_pid_t helper_pid = KERNEL_PID_UNDEF;
-static nhdp_if_entry_t nhdp_if_table[NG_NETIF_NUMOF];
+static nhdp_if_entry_t nhdp_if_table[GNRC_NETIF_NUMOF];
 static mutex_t send_rcv_mutex = MUTEX_INIT;
-static sockaddr6_t sa_bcast;
-static int sock_rcv;
+static conn_udp_t conn;
+
+#if (NHDP_METRIC_NEEDS_TIMER)
+static vtimer_t metric_timer;
+static timex_t metric_interval;
+#endif
 
 /* Internal function prototypes */
 static void *_nhdp_runner(void *arg __attribute__((unused)));
@@ -66,7 +75,7 @@ void nhdp_init(void)
     }
 
     /* Prepare interface table */
-    for (int i = 0; i < NG_NETIF_NUMOF; i++) {
+    for (int i = 0; i < GNRC_NETIF_NUMOF; i++) {
         nhdp_if_table[i].if_pid = KERNEL_PID_UNDEF;
         memset(&nhdp_if_table[i].wr_target, 0, sizeof(struct rfc5444_writer_target));
     }
@@ -80,16 +89,18 @@ kernel_pid_t nhdp_start(void)
 {
     if (nhdp_pid == KERNEL_PID_UNDEF) {
         /* Init destination address for NHDP's packets */
-        sa_bcast.sin6_family = AF_INET6;
-        sa_bcast.sin6_port = HTONS(MANET_PORT);
-        ipv6_addr_set_all_nodes_addr(&sa_bcast.sin6_addr);
-
-        /* Configure sending/receiving UDP socket */
-        sock_rcv = socket_base_socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 
         /* Start the NHDP thread */
-        nhdp_pid = thread_create(nhdp_stack, sizeof(nhdp_stack), PRIORITY_MAIN - 1,
+        nhdp_pid = thread_create(nhdp_stack, sizeof(nhdp_stack), THREAD_PRIORITY_MAIN - 1,
                                  CREATE_STACKTEST, _nhdp_runner, NULL, "NHDP");
+
+#if (NHDP_METRIC_NEEDS_TIMER)
+        /* Configure periodic timer message to refresh metric values */
+        if (nhdp_pid != KERNEL_PID_UNDEF) {
+            metric_interval = timex_from_uint64(DAT_REFRESH_INTERVAL * SEC_IN_USEC);
+            vtimer_set_msg(&metric_timer, metric_interval, nhdp_pid, NHDP_METRIC_TIMER, NULL);
+        }
+#endif
     }
 
     return nhdp_pid;
@@ -113,7 +124,7 @@ int nhdp_register_if(kernel_pid_t if_pid, uint8_t *addr, size_t addr_size, uint8
         return -2;
     }
 
-    for (int i = 0; i < NG_NETIF_NUMOF; i++) {
+    for (int i = 0; i < GNRC_NETIF_NUMOF; i++) {
         if (nhdp_if_table[i].if_pid == KERNEL_PID_UNDEF) {
             if_entry = &nhdp_if_table[i];
             break;
@@ -179,7 +190,7 @@ int nhdp_register_if(kernel_pid_t if_pid, uint8_t *addr, size_t addr_size, uint8
     helper_pid = if_pid;
 
     /* Start the receiving thread */
-    nhdp_rcv_pid = thread_create(nhdp_rcv_stack, sizeof(nhdp_rcv_stack), PRIORITY_MAIN - 1,
+    nhdp_rcv_pid = thread_create(nhdp_rcv_stack, sizeof(nhdp_rcv_stack), THREAD_PRIORITY_MAIN - 1,
                                  CREATE_STACKTEST, _nhdp_receiver, NULL, "nhdp_rcv_thread");
 
     /* Start sending periodic HELLO */
@@ -248,6 +259,18 @@ static void *_nhdp_runner(void *arg)
                 mutex_unlock(&send_rcv_mutex);
                 break;
 
+#if (NHDP_METRIC_NEEDS_TIMER)
+            case NHDP_METRIC_TIMER:
+                mutex_lock(&send_rcv_mutex);
+                /* Process necessary metric computations */
+                iib_process_metric_refresh();
+
+                /* Schedule next sending */
+                vtimer_set_msg(&metric_timer, metric_interval,
+                               thread_getpid(), NHDP_METRIC_TIMER, NULL);
+                mutex_unlock(&send_rcv_mutex);
+                break;
+#endif
             default:
                 break;
         }
@@ -268,20 +291,20 @@ static void *_nhdp_receiver(void *arg __attribute__((unused)))
     msg_init_queue(msg_q, NHDP_MSG_QUEUE_SIZE);
 
     /* Configure socket address for the manet port 269 */
-    sockaddr6_t sa_rcv = {.sin6_family = AF_INET6,
-                          .sin6_port = HTONS(MANET_PORT)
-                         };
+    ipv6_addr_t unspec = IPV6_ADDR_UNSPECIFIED;
 
     /* Bind UDP socket to socket address */
-    if (socket_base_bind(sock_rcv, &sa_rcv, sizeof(sa_rcv)) == -1) {
-        /* Failed binding the socket */
-        socket_base_close(sock_rcv);
+    if (conn_udp_create(&conn, &unspec, sizeof(unspec), AF_INET6, MANET_PORT) == -1) {
+        /* Failed creating the connection */
         return 0;
     }
 
     while (1) {
-        int32_t rcv_size = socket_base_recvfrom(sock_rcv, (void *)nhdp_rcv_buf,
-                                                NHDP_MAX_RFC5444_PACKET_SZ, 0, &sa_rcv, &fromlen);
+        ipv6_addr_t rcv_addr;
+        uint16_t rcv_port;
+        int32_t rcv_size = conn_udp_recvfrom(&conn, (void *)nhdp_rcv_buf,
+                                             NHDP_MAX_RFC5444_PACKET_SZ, &rcv_addr,
+                                             sizeof(rcv_addr), &rcv_port);
 
         if (rcv_size > 0) {
             /* Packet received, let the reader handle it */
@@ -291,7 +314,7 @@ static void *_nhdp_receiver(void *arg __attribute__((unused)))
         }
     }
 
-    socket_base_close(sock_rcv);
+    gnrc_udp_close(&conn);
     return 0;
 }
 
@@ -303,5 +326,8 @@ static void write_packet(struct rfc5444_writer *wr __attribute__((unused)),
                          struct rfc5444_writer_target *iface __attribute__((unused)),
                          void *buffer, size_t length)
 {
-    socket_base_sendto(sock_rcv, buffer, length, 0, &sa_bcast, sizeof(sa_bcast));
+    ipv6_addr_t src, dst = IPV6_ADDR_ALL_NODES_LINK_LOCAL;
+    uint16_t sport, dport = MANET_PORT;
+    conn_udp_getlocaladdr(&conn, &src, &sport);
+    conn_udp_sendto(buffer, length, &src, sizeof(src), &dst, sizeof(dst), AF_INET, sport, dport);
 }

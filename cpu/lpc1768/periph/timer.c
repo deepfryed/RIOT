@@ -77,8 +77,7 @@ int timer_set(tim_t dev, int channel, unsigned int timeout)
 {
     if (dev == TIMER_0) {
         unsigned int now = timer_read(dev);
-        timer_set_absolute(dev, channel, now + timeout);
-        return 1;
+        return timer_set_absolute(dev, channel, now + timeout);
     }
     return -1;
 }
@@ -150,15 +149,6 @@ void timer_irq_disable(tim_t dev)
 {
     if (dev == TIMER_0) {
         NVIC_DisableIRQ(TIMER_0_IRQ);
-    }
-}
-
-void timer_reset(tim_t dev)
-{
-    if (dev == TIMER_0) {
-        TIMER_0_DEV->TCR |= (1 << 1);
-        asm("nop");                     /* just wait a cycle */
-        TIMER_0_DEV->TCR &= ~(1 << 1);
     }
 }
 

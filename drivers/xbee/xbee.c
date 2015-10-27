@@ -23,13 +23,11 @@
 #include <string.h>
 
 #include "xbee.h"
-#include "mutex.h"
-#include "hwtimer.h"
+#include "xtimer.h"
 #include "msg.h"
-#include "periph/uart.h"
-#include "periph/gpio.h"
+#include "net/eui64.h"
+#include "net/ieee802154.h"
 #include "periph/cpuid.h"
-#include "net/ng_netbase.h"
 
 #define ENABLE_DEBUG    (0)
 #include "debug.h"
@@ -142,7 +140,7 @@ static void _api_at_cmd(xbee_t *dev, uint8_t *cmd, uint8_t size, resp_t *resp)
 /*
  * Interrupt callbacks
  */
-int _tx_cb(void *arg)
+static int _tx_cb(void *arg)
 {
     xbee_t *dev = (xbee_t *)arg;
     if (dev->tx_count < dev->tx_limit) {
@@ -156,7 +154,7 @@ int _tx_cb(void *arg)
     return 0;
 }
 
-void _rx_cb(void *arg, char c)
+static void _rx_cb(void *arg, char c)
 {
     xbee_t *dev = (xbee_t *)arg;
     msg_t msg;
@@ -207,7 +205,7 @@ void _rx_cb(void *arg, char c)
             dev->rx_buf[dev->rx_count++] = (uint8_t)c;
             if (dev->rx_count == dev->rx_limit) {
                 /* packet is complete */
-                msg.type = NG_NETDEV_MSG_TYPE_EVENT;
+                msg.type = GNRC_NETDEV_MSG_TYPE_EVENT;
                 msg.content.value = ISR_EVENT_RX_DONE;
                 msg_send_int(&msg, dev->mac_pid);
                 dev->int_state = XBEE_INT_STATE_IDLE;
@@ -223,7 +221,7 @@ void _rx_cb(void *arg, char c)
  * Getter and setter functions
  */
 
-int _get_addr_short(xbee_t *dev, uint8_t *val, size_t len)
+static int _get_addr_short(xbee_t *dev, uint8_t *val, size_t len)
 {
     uint8_t cmd[2];
     resp_t resp;
@@ -242,7 +240,7 @@ int _get_addr_short(xbee_t *dev, uint8_t *val, size_t len)
     return -ECANCELED;
 }
 
-int _get_addr_long(xbee_t *dev, uint8_t *val, size_t len)
+static int _get_addr_long(xbee_t *dev, uint8_t *val, size_t len)
 {
     uint8_t cmd[2];
     resp_t resp;
@@ -271,7 +269,7 @@ int _get_addr_long(xbee_t *dev, uint8_t *val, size_t len)
     return -ECANCELED;
 }
 
-int _set_addr(xbee_t *dev, uint8_t *val, size_t len)
+static int _set_addr(xbee_t *dev, uint8_t *val, size_t len)
 {
     uint8_t cmd[4];
     resp_t resp;
@@ -292,7 +290,27 @@ int _set_addr(xbee_t *dev, uint8_t *val, size_t len)
     return -ECANCELED;
 }
 
-int _get_channel(xbee_t *dev, uint8_t *val, size_t max)
+static int _set_addr_len(xbee_t *dev, uint16_t *val, size_t len)
+{
+    if (len != sizeof(uint16_t)) {
+        return -EOVERFLOW;
+    }
+
+    switch (*val) {
+        case 8:
+            dev->addr_flags |= XBEE_ADDR_FLAGS_LONG;
+            break;
+        case 2:
+            dev->addr_flags &= ~XBEE_ADDR_FLAGS_LONG;
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    return sizeof(uint16_t);
+}
+
+static int _get_channel(xbee_t *dev, uint8_t *val, size_t max)
 {
     uint8_t cmd[2];
     resp_t resp;
@@ -311,7 +329,7 @@ int _get_channel(xbee_t *dev, uint8_t *val, size_t max)
     return -ECANCELED;
 }
 
-int _set_channel(xbee_t *dev, uint8_t *val, size_t len)
+static int _set_channel(xbee_t *dev, uint8_t *val, size_t len)
 {
     uint8_t cmd[3];
     resp_t resp;
@@ -329,7 +347,7 @@ int _set_channel(xbee_t *dev, uint8_t *val, size_t len)
     return -EINVAL;
 }
 
-int _get_panid(xbee_t *dev, uint8_t *val, size_t max)
+static int _get_panid(xbee_t *dev, uint8_t *val, size_t max)
 {
     uint8_t cmd[2];
     resp_t resp;
@@ -348,7 +366,7 @@ int _get_panid(xbee_t *dev, uint8_t *val, size_t max)
     return -ECANCELED;
 }
 
-int _set_panid(xbee_t *dev, uint8_t *val, size_t len)
+static int _set_panid(xbee_t *dev, uint8_t *val, size_t len)
 {
     uint8_t cmd[4];
     resp_t resp;
@@ -367,22 +385,22 @@ int _set_panid(xbee_t *dev, uint8_t *val, size_t len)
     return -EINVAL;
 }
 
-int _get_proto(xbee_t *dev, uint8_t *val, size_t max)
+static int _get_proto(xbee_t *dev, uint8_t *val, size_t max)
 {
-    if (max < sizeof(ng_nettype_t)) {
+    if (max < sizeof(gnrc_nettype_t)) {
         return -EOVERFLOW;
     }
-    memcpy(val, &(dev->proto), sizeof(ng_nettype_t));
-    return sizeof(ng_nettype_t);
+    memcpy(val, &(dev->proto), sizeof(gnrc_nettype_t));
+    return sizeof(gnrc_nettype_t);
 }
 
-int _set_proto(xbee_t *dev, uint8_t *val, size_t len)
+static int _set_proto(xbee_t *dev, uint8_t *val, size_t len)
 {
-    if (len != sizeof(ng_nettype_t)) {
+    if (len != sizeof(gnrc_nettype_t)) {
         return -EINVAL;
     }
-    memcpy(&(dev->proto), val, sizeof(ng_nettype_t));
-    return sizeof(ng_nettype_t);
+    memcpy(&(dev->proto), val, sizeof(gnrc_nettype_t));
+    return sizeof(gnrc_nettype_t);
 }
 
 /*
@@ -407,6 +425,7 @@ int xbee_init(xbee_t *dev, uart_t uart, uint32_t baudrate,
     dev->reset_pin = reset_pin;
     dev->sleep_pin = sleep_pin;
     /* set default options */
+    dev->addr_flags = 0;
     dev->proto = XBEE_DEFAULT_PROTOCOL;
     dev->options = 0;
     /* initialize buffers and locks*/
@@ -419,30 +438,30 @@ int xbee_init(xbee_t *dev, uart_t uart, uint32_t baudrate,
         DEBUG("xbee: Error initializing UART\n");
         return -ENXIO;
     }
-    if (reset_pin < GPIO_NUMOF) {
-        if (gpio_init_out(reset_pin, GPIO_NOPULL) < 0) {
+    if (reset_pin != GPIO_UNDEF) {
+        if (gpio_init(reset_pin, GPIO_DIR_OUT, GPIO_NOPULL) < 0) {
             DEBUG("xbee: Error initializing RESET pin\n");
             return -ENXIO;
         }
         gpio_set(reset_pin);
     }
-    if (sleep_pin < GPIO_NUMOF) {
-        if (gpio_init_out(sleep_pin, GPIO_NOPULL) < 0) {
+    if (sleep_pin != GPIO_UNDEF) {
+        if (gpio_init(sleep_pin, GPIO_DIR_OUT, GPIO_NOPULL) < 0) {
             DEBUG("xbee: Error initializing SLEEP pin\n");
             return -ENXIO;
         }
         gpio_clear(sleep_pin);
     }
     /* if reset pin is connected, do a hardware reset */
-    if (reset_pin < GPIO_NUMOF) {
+    if (reset_pin != GPIO_UNDEF) {
         gpio_clear(reset_pin);
-        hwtimer_wait(HWTIMER_TICKS(RESET_DELAY));
+        xtimer_usleep(RESET_DELAY);
         gpio_set(reset_pin);
     }
-     /* put the XBee device into command mode */
-    hwtimer_wait(HWTIMER_TICKS(ENTER_CMD_MODE_DELAY));
+    /* put the XBee device into command mode */
+    xtimer_usleep(ENTER_CMD_MODE_DELAY);
     _at_cmd(dev, "+++");
-    hwtimer_wait(HWTIMER_TICKS(ENTER_CMD_MODE_DELAY));
+    xtimer_usleep(ENTER_CMD_MODE_DELAY);
     /* disable non IEEE802.15.4 extensions */
     _at_cmd(dev, "ATMM2\r");
     /* put XBee module in "API mode without escaped characters" */
@@ -452,28 +471,10 @@ int xbee_init(xbee_t *dev, uart_t uart, uint32_t baudrate,
     /* exit command mode */
     _at_cmd(dev, "ATCN\r");
 
-    /* set default short address, use CPU ID if available */
-#if CPUID_ID_LEN
-    /* get CPU ID */
-    uint8_t id[CPUID_ID_LEN];
-    cpuid_get(id);
-    /* compress to 2 byte */
-    memset(dev->addr_short, 0, 2);
-    int i;
-    for (i = 0; i < (CPUID_ID_LEN / 2); i++) {
-        dev->addr_short[0] ^= id[i];
-    }
-    for (; i < CPUID_ID_LEN; i++) {
-        dev->addr_short[1] ^= id[i];
-    }
-#else
-    dev->addr_short[0] = (uint8_t)(XBEE_DEFAULT_SHORT_ADDR >> 8);
-    dev->addr_short[1] = (uint8_t)(XBEE_DEFAULT_SHORT_ADDR);
-#endif
-    _set_addr(dev, dev->addr_short, 2);
     /* load long address (we can not set it, its read only for Xbee devices) */
-    _get_addr_long(dev, dev->addr_long, 8);
+    _get_addr_long(dev, dev->addr_long.uint8, 8);
     /* set default channel */
+    _set_addr(dev, &((dev->addr_long).uint8[6]), 2);
     tmp[1] = 0;
     tmp[0] = XBEE_DEFAULT_CHANNEL;
     _set_channel(dev, tmp, 2);
@@ -486,34 +487,42 @@ int xbee_init(xbee_t *dev, uart_t uart, uint32_t baudrate,
     return 0;
 }
 
-int _send(ng_netdev_t *netdev, ng_pktsnip_t *pkt)
+static inline bool _is_broadcast(gnrc_netif_hdr_t *hdr)
+{
+    /* IEEE 802.15.4 does not support multicast so we need to check both flags */
+    return (bool)(hdr->flags & (GNRC_NETIF_HDR_FLAGS_BROADCAST |
+                                GNRC_NETIF_HDR_FLAGS_MULTICAST));
+}
+
+static int _send(gnrc_netdev_t *netdev, gnrc_pktsnip_t *pkt)
 {
     xbee_t *dev = (xbee_t *)netdev;
     size_t size;
     size_t pos;
-    ng_netif_hdr_t *hdr;
-    ng_pktsnip_t *payload;
+    gnrc_netif_hdr_t *hdr;
+    gnrc_pktsnip_t *payload;
 
     /* check device descriptor and packet */
     if (pkt == NULL) {
         return -ENOMSG;
     }
     if (dev == NULL) {
-        ng_pktbuf_release(pkt);
+        gnrc_pktbuf_release(pkt);
         return -ENODEV;
     }
 
     /* figure out the size of the payload to send */
-    size = ng_pkt_len(pkt->next);
+    size = gnrc_pkt_len(pkt->next);
     if (size > XBEE_MAX_PAYLOAD_LENGTH) {
         DEBUG("xbee: Error sending data, payload length exceeds limit\n");
-        ng_pktbuf_release(pkt);
+        gnrc_pktbuf_release(pkt);
         return -EOVERFLOW;
     }
-    /* get netif header check address length */
-    hdr = (ng_netif_hdr_t *)pkt->data;
-    if (!(hdr->dst_l2addr_len == 2 || hdr->dst_l2addr_len == 8)) {
-        ng_pktbuf_release(pkt);
+    /* get netif header check address length and flags */
+    hdr = (gnrc_netif_hdr_t *)pkt->data;
+    if (!((hdr->dst_l2addr_len == 2) || (hdr->dst_l2addr_len == 8) ||
+          _is_broadcast(hdr))) {
+        gnrc_pktbuf_release(pkt);
         return -ENOMSG;
     }
 
@@ -523,17 +532,25 @@ int _send(ng_netdev_t *netdev, ng_pktsnip_t *pkt)
     dev->tx_buf[0] = API_START_DELIMITER;
     dev->tx_buf[4] = 0;         /* set to zero to disable response frame */
     /* set size, API id and address field depending on dst address length  */
+    if (_is_broadcast(hdr)) {
+        dev->tx_buf[1] = (uint8_t)((size + 5) >> 8);
+        dev->tx_buf[2] = (uint8_t)(size + 5);
+        dev->tx_buf[3] = API_ID_TX_SHORT_ADDR;
+        dev->tx_buf[4] = 0xff;
+        dev->tx_buf[5] = 0xff;
+    }
     if (hdr->dst_l2addr_len == 2) {
         dev->tx_buf[1] = (uint8_t)((size + 5) >> 8);
         dev->tx_buf[2] = (uint8_t)(size + 5);
         dev->tx_buf[3] = API_ID_TX_SHORT_ADDR;
-        memcpy(dev->tx_buf + 5, ng_netif_hdr_get_dst_addr(hdr), 2);
+        memcpy(dev->tx_buf + 5, gnrc_netif_hdr_get_dst_addr(hdr), 2);
         pos = 7;
-    } else {
+    }
+    else {
         dev->tx_buf[1] = (uint8_t)((size + 11) >> 8);
         dev->tx_buf[2] = (uint8_t)(size + 11);
         dev->tx_buf[3] = API_ID_TX_LONG_ADDR;
-        memcpy(dev->tx_buf + 11, ng_netif_hdr_get_dst_addr(hdr), 8);
+        memcpy(dev->tx_buf + 5, gnrc_netif_hdr_get_dst_addr(hdr), 8);
         pos = 13;
     }
     /* set options */
@@ -553,12 +570,12 @@ int _send(ng_netdev_t *netdev, ng_pktsnip_t *pkt)
     /* start transmission */
     uart_tx_begin(dev->uart);
     /* release data */
-    ng_pktbuf_release(pkt);
+    gnrc_pktbuf_release(pkt);
     /* return number of payload byte */
     return (int)size;
 }
 
-int _add_cb(ng_netdev_t *dev, ng_netdev_event_cb_t cb)
+static int _add_cb(gnrc_netdev_t *dev, gnrc_netdev_event_cb_t cb)
 {
     if (dev == NULL) {
         return -ENODEV;
@@ -570,7 +587,7 @@ int _add_cb(ng_netdev_t *dev, ng_netdev_event_cb_t cb)
     return 0;
 }
 
-int _rem_cb(ng_netdev_t *dev, ng_netdev_event_cb_t cb)
+static int _rem_cb(gnrc_netdev_t *dev, gnrc_netdev_event_cb_t cb)
 {
     if (dev == NULL) {
         return -ENODEV;
@@ -582,7 +599,7 @@ int _rem_cb(ng_netdev_t *dev, ng_netdev_event_cb_t cb)
     return 0;
 }
 
-int _get(ng_netdev_t *netdev, ng_netconf_opt_t opt, void *value, size_t max_len)
+static int _get(gnrc_netdev_t *netdev, netopt_t opt, void *value, size_t max_len)
 {
     xbee_t *dev = (xbee_t *)netdev;
     if (dev == NULL) {
@@ -590,22 +607,52 @@ int _get(ng_netdev_t *netdev, ng_netconf_opt_t opt, void *value, size_t max_len)
     }
 
     switch (opt) {
-        case NETCONF_OPT_ADDRESS:
+        case NETOPT_ADDRESS:
             return _get_addr_short(dev, (uint8_t *)value, max_len);
-        case NETCONF_OPT_ADDRESS_LONG:
+        case NETOPT_ADDRESS_LONG:
             return _get_addr_long(dev, (uint8_t *)value, max_len);
-        case NETCONF_OPT_CHANNEL:
+        case NETOPT_ADDR_LEN:
+        case NETOPT_SRC_LEN:
+            if (max_len < sizeof(uint16_t)) {
+                return -EOVERFLOW;
+            }
+            if (dev->addr_flags & XBEE_ADDR_FLAGS_LONG) {
+                *((uint16_t *)value) = 8;
+            }
+            else {
+                *((uint16_t *)value) = 2;
+            }
+            return sizeof(uint16_t);
+        case NETOPT_IPV6_IID:
+            if (max_len < sizeof(eui64_t)) {
+                return -EOVERFLOW;
+            }
+            if (dev->addr_flags & XBEE_ADDR_FLAGS_LONG) {
+                ieee802154_get_iid(value, (uint8_t *)&dev->addr_long, 8);
+            }
+            else {
+                ieee802154_get_iid(value, (uint8_t *)&dev->addr_short, 2);
+            }
+
+            return sizeof(eui64_t);
+        case NETOPT_CHANNEL:
             return _get_channel(dev, (uint8_t *)value, max_len);
-        case NETCONF_OPT_NID:
+        case NETOPT_MAX_PACKET_SIZE:
+            if (max_len < sizeof(uint16_t)) {
+                return -EOVERFLOW;
+            }
+            *((uint16_t *)value) = XBEE_MAX_PAYLOAD_LENGTH;
+            return sizeof(uint16_t);
+        case NETOPT_NID:
             return _get_panid(dev, (uint8_t *)value, max_len);
-        case NETCONF_OPT_PROTO:
+        case NETOPT_PROTO:
             return _get_proto(dev, (uint8_t *)value, max_len);
         default:
             return -ENOTSUP;
     }
 }
 
-int _set(ng_netdev_t *netdev, ng_netconf_opt_t opt, void *value, size_t value_len)
+static int _set(gnrc_netdev_t *netdev, netopt_t opt, void *value, size_t value_len)
 {
     xbee_t *dev = (xbee_t *)netdev;
     if (dev == NULL) {
@@ -613,25 +660,28 @@ int _set(ng_netdev_t *netdev, ng_netconf_opt_t opt, void *value, size_t value_le
     }
 
     switch (opt) {
-        case NETCONF_OPT_ADDRESS:
+        case NETOPT_ADDRESS:
             return _set_addr(dev, (uint8_t *)value, value_len);
-        case NETCONF_OPT_CHANNEL:
+        case NETOPT_ADDR_LEN:
+        case NETOPT_SRC_LEN:
+            return _set_addr_len(dev, value, value_len);
+        case NETOPT_CHANNEL:
             return _set_channel(dev, (uint8_t *)value, value_len);
-        case NETCONF_OPT_NID:
+        case NETOPT_NID:
             return _set_panid(dev, (uint8_t *)value, value_len);
-        case NETCONF_OPT_PROTO:
+        case NETOPT_PROTO:
             return _set_proto(dev, (uint8_t *)value, value_len);
         default:
             return -ENOTSUP;
     }
 }
 
-void _isr_event(ng_netdev_t *netdev, uint32_t event_type)
+static void _isr_event(gnrc_netdev_t *netdev, uint32_t event_type)
 {
     xbee_t *dev = (xbee_t *)netdev;
-    ng_pktsnip_t *pkt_head;
-    ng_pktsnip_t *pkt;
-    ng_netif_hdr_t *hdr;
+    gnrc_pktsnip_t *pkt_head;
+    gnrc_pktsnip_t *pkt;
+    gnrc_netif_hdr_t *hdr;
     size_t pos;
     size_t addr_len;
     uint8_t cksum = 0;
@@ -665,34 +715,34 @@ void _isr_event(ng_netdev_t *netdev, uint32_t event_type)
     }
 
     /* allocate and fill interface header */
-    pkt_head = ng_pktbuf_add(NULL, NULL,
-                             sizeof(ng_netif_hdr_t) + (2 * addr_len),
-                             NG_NETTYPE_UNDEF);
+    pkt_head = gnrc_pktbuf_add(NULL, NULL,
+                               sizeof(gnrc_netif_hdr_t) + (2 * addr_len),
+                               GNRC_NETTYPE_NETIF);
     if (pkt_head == NULL) {
         DEBUG("xbee: Error allocating netif header in packet buffer on RX\n");
         dev->rx_count = 0;
         return;
     }
-    hdr = (ng_netif_hdr_t *)pkt_head->data;
+    hdr = (gnrc_netif_hdr_t *)pkt_head->data;
     hdr->src_l2addr_len = (uint8_t)addr_len;
     hdr->dst_l2addr_len = (uint8_t)addr_len;
     hdr->if_pid = dev->mac_pid;
     hdr->rssi = dev->rx_buf[2 + addr_len];
     hdr->lqi = 0;
-    ng_netif_hdr_set_src_addr(hdr, &(dev->rx_buf[1]), addr_len);
+    gnrc_netif_hdr_set_src_addr(hdr, &(dev->rx_buf[1]), addr_len);
     if (addr_len == 2) {
-        ng_netif_hdr_set_dst_addr(hdr, dev->addr_short, 2);
+        gnrc_netif_hdr_set_dst_addr(hdr, dev->addr_short, 2);
     }
     else {
-        ng_netif_hdr_set_dst_addr(hdr, dev->addr_long, 8);
+        gnrc_netif_hdr_set_dst_addr(hdr, dev->addr_long.uint8, 8);
     }
     pos = 3 + addr_len;
     /* allocate and copy payload */
-    pkt = ng_pktbuf_add(pkt_head, &(dev->rx_buf[pos]), dev->rx_limit - pos - 1,
-                        dev->proto);
+    pkt = gnrc_pktbuf_add(pkt_head, &(dev->rx_buf[pos]), dev->rx_limit - pos - 1,
+                          dev->proto);
     if (pkt == NULL) {
         DEBUG("xbee: Error allocating payload in packet buffer on RX\n");
-        ng_pktbuf_release(pkt_head);
+        gnrc_pktbuf_release(pkt_head);
         dev->rx_count = 0;
         return;
     }
@@ -706,7 +756,7 @@ void _isr_event(ng_netdev_t *netdev, uint32_t event_type)
 /*
  * The drivers netdev interface
  */
-const ng_netdev_driver_t xbee_driver = {
+const gnrc_netdev_driver_t xbee_driver = {
     .send_data = _send,
     .add_event_callback = _add_cb,
     .rem_event_callback = _rem_cb,

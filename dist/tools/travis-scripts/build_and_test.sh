@@ -23,6 +23,7 @@ set_result() {
 
 if [[ $BUILDTEST_MCU_GROUP ]]
 then
+
     if [ "$BUILDTEST_MCU_GROUP" == "static-tests" ]
     then
         RESULT=0
@@ -45,9 +46,6 @@ then
         ./dist/tools/externc/check.sh master
         RESULT=$(set_result $? $RESULT)
 
-        ./dist/tools/endingcheck/check.sh riot/master --diff-filter=MA
-        RESULT=$(set_result $? $RESULT)
-
         # TODO:
         #   Remove all but `master` parameters to cppcheck (and remove second
         #   invocation) once all warnings of cppcheck have been taken care of
@@ -63,14 +61,14 @@ then
 
         exit $RESULT
     fi
+
     if [ "$BUILDTEST_MCU_GROUP" == "x86" ]
     then
-
         make -C ./tests/unittests all test BOARD=native || exit
         # TODO:
         #   Reenable once https://github.com/RIOT-OS/RIOT/issues/2300 is
         #   resolved:
         #   - make -C ./tests/unittests all test BOARD=qemu-i386 || exit
     fi
-    ./dist/tools/compile_test/compile_test.py
+    ./dist/tools/compile_test/compile_test.py riot/master
 fi

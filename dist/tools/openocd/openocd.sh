@@ -17,12 +17,23 @@
 #
 # The script supports the following actions:
 #
-# flash:        flash a given hexfile to the target.
+# flash:        flash a given hex file to the target.
 #               hexfile is expected in ihex format and is pointed to
 #               by HEXFILE environment variable
 #
 #               options:
-#               HEXFILE: path to the hexfile that is flashed
+#               HEXFILE: path to the hex file that is flashed
+#               PRE_FLASH_CHECK_SCRIPT: a command to run before flashing to
+#               verify the integrity of the image to be flashed. HEXFILE is
+#               passed as an argument to this command.
+#
+# flash-elf:    flash a given ELF file to the target.
+#
+#               options:
+#               ELFFILE: path to the ELF file that is flashed
+#               PRE_FLASH_CHECK_SCRIPT: a command to run before flashing to
+#               verify the integrity of the image to be flashed. ELFFILE is
+#               passed as an argument to this command.
 #
 # debug:        starts OpenOCD as GDB server in the background and
 #               connects to the server with the GDB client specified by
@@ -33,6 +44,7 @@
 #               TCL_PORT:       port opened for TCL connections
 #               TELNET_PORT:    port opened for telnet connections
 #               TUI:            if TUI!=null, the -tui option will be used
+#               ELFFILE:        path to the ELF file to debug
 #
 # debug-server: starts OpenOCD as GDB server, but does not connect to
 #               to it with any frontend. This might be useful when using
@@ -47,7 +59,7 @@
 #
 #
 # @author       Hauke Peteresen <hauke.petersen@fu-berlin.de>
-# @author       Joakim Gebart <joakim.gebart@eistec.se>
+# @author       Joakim Nohlgård <joakim.nohlgard@eistec.se>
 
 # default GDB port
 _GDB_PORT=3333
@@ -117,19 +129,61 @@ test_tui() {
 do_flash() {
     test_config
     test_hexfile
+    if [ -n "${PRE_FLASH_CHECK_SCRIPT}" ]; then
+        sh -c "${PRE_FLASH_CHECK_SCRIPT} '${HEXFILE}'"
+        RETVAL=$?
+        if [ $RETVAL -ne 0 ]; then
+            echo "pre-flash checks failed, status=$RETVAL"
+            exit $RETVAL
+        fi
+    fi
     # flash device
-    ${OPENOCD} -f "${OPENOCD_CONFIG}" \
-            "$@" \
-            -c "tcl_port 0" \
-            -c "telnet_port 0" \
-            -c "gdb_port 0" \
-            -c "init" \
-            -c "targets" \
-            -c "reset halt" \
-            -c "program ${HEXFILE} verify" \
-            -c "reset run" \
-            -c "shutdown"
-    echo "Done flashing"
+    sh -c "${OPENOCD} -f '${OPENOCD_CONFIG}' \
+            ${OPENOCD_EXTRA_INIT} \
+            -c 'tcl_port 0' \
+            -c 'telnet_port 0' \
+            -c 'gdb_port 0' \
+            -c 'init' \
+            -c 'targets' \
+            -c 'reset halt' \
+            ${OPENOCD_PRE_FLASH_CMDS} \
+            -c 'flash write_image erase \"${HEXFILE}\"' \
+            -c 'reset halt' \
+            ${OPENOCD_PRE_VERIFY_CMDS} \
+            -c 'verify_image \"${HEXFILE}\"' \
+            -c 'reset run' \
+            -c 'shutdown'"
+    echo 'Done flashing'
+}
+
+do_flash_elf() {
+    test_config
+    test_elffile
+    if [ -n "${PRE_FLASH_CHECK_SCRIPT}" ]; then
+        sh -c "${PRE_FLASH_CHECK_SCRIPT} '${ELFFILE}'"
+        RETVAL=$?
+        if [ $RETVAL -ne 0 ]; then
+            echo "pre-flash checks failed, status=$RETVAL"
+            exit $RETVAL
+        fi
+    fi
+    # flash device
+    sh -c "${OPENOCD} -f '${OPENOCD_CONFIG}' \
+            ${OPENOCD_EXTRA_INIT} \
+            -c 'tcl_port 0' \
+            -c 'telnet_port 0' \
+            -c 'gdb_port 0' \
+            -c 'init' \
+            -c 'targets' \
+            -c 'reset halt' \
+            ${OPENOCD_PRE_FLASH_CMDS} \
+            -c 'flash write_image erase \"${ELFFILE}\"' \
+            -c 'reset halt' \
+            ${OPENOCD_PRE_VERIFY_CMDS} \
+            -c 'verify_image \"${ELFFILE}\"' \
+            -c 'reset run' \
+            -c 'shutdown'"
+    echo 'Done flashing'
 }
 
 do_debug() {
@@ -137,49 +191,61 @@ do_debug() {
     test_elffile
     test_ports
     test_tui
+    # setsid is needed so that Ctrl+C in GDB doesn't kill OpenOCD
+    [ -z "${SETSID}" ] && SETSID="$(which setsid)"
+    # temporary file that saves OpenOCD pid
+    OCD_PIDFILE=$(mktemp -t "openocd_pid.XXXXXXXXXX")
+    # cleanup after script terminates
+    trap "cleanup ${OCD_PIDFILE}" EXIT
+    # don't trap on Ctrl+C, because GDB keeps running
+    trap '' INT
     # start OpenOCD as GDB server
-    ${OPENOCD} -f "${OPENOCD_CONFIG}" \
-            "$@" \
-            -c "tcl_port ${TCL_PORT}" \
-            -c "telnet_port ${TELNET_PORT}" \
-            -c "gdb_port ${GDB_PORT}" \
-            -c "init" \
-            -c "targets" \
-            -c "reset halt" \
-            -l /dev/null &
-    # save PID for terminating the server afterwards
-    OCD_PID=$?
+    ${SETSID} sh -c "${OPENOCD} -f '${OPENOCD_CONFIG}' \
+            ${OPENOCD_EXTRA_INIT} \
+            -c 'tcl_port ${TCL_PORT}' \
+            -c 'telnet_port ${TELNET_PORT}' \
+            -c 'gdb_port ${GDB_PORT}' \
+            -c 'init' \
+            -c 'targets' \
+            -c 'halt' \
+            -l /dev/null & \
+            echo \$! > $OCD_PIDFILE" &
     # connect to the GDB server
     ${DBG} ${TUI} -ex "tar ext :${GDB_PORT}" ${ELFFILE}
-    # clean up
-    kill ${OCD_PID}
+    # will be called by trap
+    cleanup() {
+        OCD_PID="$(cat $OCD_PIDFILE)"
+        kill ${OCD_PID}
+        rm -f "$OCD_PIDFILE"
+        exit 0
+    }
 }
 
 do_debugserver() {
     test_config
     test_ports
     # start OpenOCD as GDB server
-    ${OPENOCD} -f "${OPENOCD_CONFIG}" \
-            "$@" \
-            -c "tcl_port ${TCL_PORT}" \
-            -c "telnet_port ${TELNET_PORT}" \
-            -c "gdb_port ${GDB_PORT}" \
-            -c "init" \
-            -c "targets" \
-            -c "reset halt"
+    sh -c "${OPENOCD} -f '${OPENOCD_CONFIG}' \
+            ${OPENOCD_EXTRA_INIT} \
+            -c 'tcl_port ${TCL_PORT}' \
+            -c 'telnet_port ${TELNET_PORT}' \
+            -c 'gdb_port ${GDB_PORT}' \
+            -c 'init' \
+            -c 'targets' \
+            -c 'reset halt'"
 }
 
 do_reset() {
     test_config
     # start OpenOCD and invoke board reset
-    ${OPENOCD} -f "${OPENOCD_CONFIG}" \
-            "$@" \
-            -c "tcl_port 0" \
-            -c "telnet_port 0" \
-            -c "gdb_port 0" \
-            -c "init" \
-            -c "reset run" \
-            -c "shutdown"
+    sh -c "${OPENOCD} -f '${OPENOCD_CONFIG}' \
+            ${OPENOCD_EXTRA_INIT} \
+            -c 'tcl_port 0' \
+            -c 'telnet_port 0' \
+            -c 'gdb_port 0' \
+            -c 'init' \
+            -c 'reset run' \
+            -c 'shutdown'"
 }
 
 #
@@ -192,6 +258,10 @@ case "${ACTION}" in
   flash)
     echo "### Flashing Target ###"
     do_flash "$@"
+    ;;
+  flash-elf)
+    echo "### Flashing Target ###"
+    do_flash_elf "$@"
     ;;
   debug)
     echo "### Starting Debugging ###"

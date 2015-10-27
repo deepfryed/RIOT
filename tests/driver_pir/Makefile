@@ -5,20 +5,20 @@ FEATURES_REQUIRED = periph_gpio
 
 # Define default pin mappings for some boards:
 ifneq (,$(filter stm32f4discovery,$(BOARD)))
-  export PIR_GPIO ?= GPIO_8
+  export PIR_GPIO ?= GPIO_PIN\(3,7\)
 endif
 ifneq (,$(filter arduino-due,$(BOARD)))
-  export PIR_GPIO ?= GPIO_10
+  export PIR_GPIO ?= GPIO_PIN\(0,20\)
 endif
 
 USEMODULE += pir
-USEMODULE += vtimer
+USEMODULE += xtimer
 
 ifneq (,$(PIR_GPIO))
   CFLAGS += -DPIR_GPIO=$(PIR_GPIO)
 else
   # set random default
-  CFLAGS += -DPIR_GPIO=GPIO_0
+  CFLAGS += -DPIR_GPIO=GPIO_PIN\(0,0\)
 endif
 
 include $(RIOTBASE)/Makefile.include

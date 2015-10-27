@@ -15,11 +15,11 @@ extern "C" {
 
 /**
  * @defgroup    ltc4150 LTC4150
- * @ingroup     drivers
+ * @ingroup     drivers_sensors
  * @brief       Driver for the Linear Technology LTC4150 Coulomb Counter
  * @{
  *
- * @file        ltc4150_arch.h
+ * @file
  * @brief       LTC4150 Coulomb Counter
  *
  * @author      Heiko Will

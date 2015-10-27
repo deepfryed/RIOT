@@ -35,6 +35,8 @@ extern "C" {
 typedef struct nib_entry_t {
     nhdp_addr_entry_t *address_list_head;   /**< Pointer to this tuple's addresses*/
     uint8_t symmetric;                      /**< Flag whether sym link to this nb exists */
+    uint32_t metric_in;                     /**< Lowest metric value for incoming link */
+    uint32_t metric_out;                    /**< Lowest metric value for outgoing link */
     struct nib_entry_t *next;               /**< Pointer to next list entry */
 } nib_entry_t;
 
@@ -53,13 +55,10 @@ typedef struct nib_lost_address_entry_t {
  * @note
  * Must not be called from outside the NHDP reader's message processing.
  *
- * @param[in] nb_list       Pointer to the Neighbor Address List from the received HELLO
- * @param[out] out_list     Pointer to the created Removed Address List
- *
  * @return                  Pointer to the new Neighbor Tuple
  * @return                  NULL on error
  */
-nib_entry_t *nib_process_hello(nhdp_addr_entry_t *nb_list, nhdp_addr_entry_t **out_list);
+nib_entry_t *nib_process_hello(void);
 
 /**
  * @brief                   Add addresses to the currently constructed HELLO message

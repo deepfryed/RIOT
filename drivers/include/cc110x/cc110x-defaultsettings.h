@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Freie Universität Berlin
+ * Copyright (C) 2015 Kaspar Schleiser <kaspar@schleiser.de>
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -7,52 +7,40 @@
  */
 
 /**
- * @ingroup     drivers_cc110x
+ * @ingroup   driver_cc110x
  * @{
  *
  * @file
- * @brief       TI Chipcon CC110x default settings
+ * @brief     cc110x default settings override
  *
- * @author      Thomas Hillebrandt <hillebra@inf.fu-berlin.de>
- * @author      Heiko Will <hwill@inf.fu-berlin.de>
- * @author      Fabian Nack <nack@inf.fu-berlin.de>
+ * By setting either CC110X_DEFAULT_PATABLE or CC110X_DEFAULT_FREQ in board.h,
+ * it is possible to override the default pa table or base frequency registers
+ * on a per-device basis.
+ *
+ * @author    Kaspar Schleiser <kaspar@schleiser.de>
  */
-
 #ifndef CC110X_DEFAULTSETTINGS_H
 #define CC110X_DEFAULTSETTINGS_H
 
-#include <stdint.h>
+#include "board.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Returns hwtimer ticks per us */
-#define RTIMER_TICKS(us) HWTIMER_TICKS(us)
+#ifndef CC110X_DEFAULT_PATABLE
+#define CC110X_DEFAULT_PATABLE cc110x_default_pa_table
+extern const char cc110x_default_pa_table[8];
+#endif
 
-#define TIMER_TICK_USEC_RES     (122)
-
-/* Reset wait time (in reset procedure) */
-#define RESET_WAIT_TIME         RTIMER_TICKS(4 * TIMER_TICK_USEC_RES)
-
-/* Time chip needs to go to RX */
-#define IDLE_TO_RX_TIME         RTIMER_TICKS(1 * TIMER_TICK_USEC_RES)
-
-/* Time to wait for SO to go low after CS */
-#define CS_SO_WAIT_TIME         RTIMER_TICKS(4 * TIMER_TICK_USEC_RES)
-
-/* Max. retries for SO to go low after CS */
-#define CC1100_GDO1_LOW_RETRY   (100)
-
-/* The size of the configuration array for CC1100 in bytes */
-#define CC1100_CONF_SIZE        (39)
-
-/* The default channel number (0-24) for CC1100 */
-#define CC1100_DEFAULT_CHANNR   (0)
+#ifndef CC110X_DEFAULT_FREQ
+#define CC110X_DEFAULT_FREQ cc110x_default_base_freq
+extern const char cc110x_default_base_freq[3];
+#endif
 
 #ifdef __cplusplus
 }
 #endif
 
-/** @} */
 #endif /* CC110X_DEFAULTSETTINGS_H */
+/** @} */

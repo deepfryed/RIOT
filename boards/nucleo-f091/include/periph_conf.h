@@ -16,8 +16,8 @@
  * @author      Hauke Petersen <hauke.petersen@fu-berlin.de>
  */
 
-#ifndef __PERIPH_CONF_H
-#define __PERIPH_CONF_H
+#ifndef PERIPH_CONF_H_
+#define PERIPH_CONF_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,7 +92,6 @@ extern "C" {
  * @name GPIO configuration
  * @{
  */
-#define GPIO_NUMOF          (6U)
 #define GPIO_0_EN           1
 #define GPIO_1_EN           1
 #define GPIO_2_EN           1
@@ -157,9 +156,21 @@ extern "C" {
 #define GPIO_5_IRQ          EXTI4_15_IRQn
 /** @} */
 
+/**
+ * @name RTC configuration
+ * @{
+ */
+/**
+ * Nucleos with MB1136 C-02 or MB1136 C-03 -sticker on it have the required LSE
+ * oscillator provided on the X2 slot.
+ * See Nucleo User Manual UM1724 section 5.6.2.
+ */
+#define RTC_NUMOF           (1U)
+/** @} */
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __PERIPH_CONF_H */
+#endif /* PERIPH_CONF_H_ */
 /** @} */

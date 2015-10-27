@@ -1,9 +1,11 @@
 APPLICATION = unittests
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_RAM := chronos msb-430 msb-430h redbee-econotag spark-core \
-                          stm32f0discovery telosb wsn430-v1_3b wsn430-v1_4 z1 \
-                          nucleo-f334
+BOARD_INSUFFICIENT_MEMORY := airfy-beacon chronos msb-430 msb-430h pca10000 \
+                          pca10005 spark-core stm32f0discovery \
+                          telosb wsn430-v1_3b wsn430-v1_4 z1 nucleo-f334 \
+                          yunjia-nrf51822 samr21-xpro arduino-mega2560 \
+                          airfy-beacon nrf51dongle nrf6310 weio
 
 USEMODULE += embunit
 
@@ -17,12 +19,6 @@ DISABLE_MODULE += auto_init
 
 # Pull in `Makefile.include`s from the test suites:
 -include $(UNIT_TESTS:%=$(RIOTBASE)/tests/unittests/%/Makefile.include)
-
-ifneq (,$(filter netdev_dummy,$(USEMODULE)))
-    USEMODULE += netdev_base
-    DIRS += netdev_dummy
-    INCLUDES += -I$(RIOTBASE)/tests/unittests/netdev_dummy/include
-endif
 
 DIRS += $(UNIT_TESTS)
 BASELIBS += $(UNIT_TESTS:%=$(BINDIR)%.a)

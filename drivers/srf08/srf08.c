@@ -10,7 +10,7 @@
  * @ingroup     driver_srf08
  * @{
  *
- * @file        srf08.c
+ * @file
  * @brief       Driver for the SRF08 ultrasonic ranger.
  *              The connection between the MCU and the SRF08 is based on the
  *              i2c-interface.
@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "hwtimer.h"
+#include "xtimer.h"
 #include "srf08.h"
 #include "periph/i2c.h"
 
@@ -116,7 +116,7 @@ int srf08_get_distances(srf08_t *dev, uint16_t *range_array, int num_echos, srf0
         return -2;
     }
 
-    hwtimer_wait(HWTIMER_TICKS(70000));
+    xtimer_usleep(70000);
 
     /* read all echo buffers */
     for (register_location = 2; register_location < max_reg_no_read;

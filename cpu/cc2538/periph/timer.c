@@ -10,7 +10,7 @@
  * @ingroup     driver_periph
  * @{
  *
- * @file        timer.c
+ * @file
  * @brief       Low-level timer driver implementation for the CC2538 CPU
  *
  * @author      Ian Martin <ian@locicontrols.com>
@@ -379,13 +379,6 @@ void timer_irq_disable(tim_t dev)
             return;
     }
 }
-
-void timer_reset(tim_t dev)
-{
-    timer_set_absolute(dev, 0, 0);
-    timer_set_absolute(dev, 1, 0);
-}
-
 
 #if TIMER_0_EN
 void TIMER_0_ISR_1(void)

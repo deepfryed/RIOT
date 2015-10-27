@@ -10,7 +10,7 @@
  * @ingroup     core_thread
  * @{
  *
- * @file        thread.c
+ * @file
  * @brief       Threading implementation
  *
  * @author      Kaspar Schleiser <kaspar@schleiser.de>
@@ -29,7 +29,6 @@
 #include "debug.h"
 #include "kernel_internal.h"
 #include "bitarithm.h"
-#include "hwtimer.h"
 #include "sched.h"
 
 volatile tcb_t *thread_get(kernel_pid_t pid)
@@ -161,7 +160,7 @@ kernel_pid_t thread_create(char *stack, int stacksize, char priority, int flags,
     }
     else {
         /* create stack guard */
-        *stack = (uintptr_t) stack;
+        *(uintptr_t *) stack = (uintptr_t) stack;
     }
 #endif
 

@@ -30,11 +30,7 @@
 #include <stdbool.h>
 
 #include "shell.h"
-#include "posix_io.h"
-#include "board_uart0.h"
 #include "tm.h"
-
-#define SHELL_BUFSIZE (UART0_BUFSIZE)
 
 static const char MON_NAMES[12][3] = {
     "JAN", "FEB", "MAR", "APR",
@@ -134,31 +130,12 @@ static const shell_command_t shell_commands[] = {
     { NULL, NULL, NULL }
 };
 
-static int shell_readc(void)
-{
-    char c;
-    int result = posix_read(uart0_handler_pid, &c, 1);
-    if (result != 1) {
-        return -1;
-    }
-    return (unsigned char) c;
-}
-
-static void shell_putchar(int c)
-{
-    putchar(c);
-}
-
 int main(void)
 {
-    board_uart0_init();
-    posix_open(uart0_handler_pid, 0);
-
-    shell_t shell;
-    shell_init(&shell, shell_commands, SHELL_BUFSIZE, shell_readc, shell_putchar);
-
     puts("`struct tm` utility shell.");
-    shell_run(&shell);
+
+    char line_buf[SHELL_DEFAULT_BUFSIZE];
+    shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
 
     return 0;
 }

@@ -48,19 +48,14 @@ extern "C" {
 /** @} */
 
 /**
- * Assign the hardware timer
- */
-#define HW_TIMER            TIMER_0
-
-/**
  * @name Define the interface to the AT86RF231 radio
  * @{
  */
 #define AT86RF231_SPI       SPI_0
-#define AT86RF231_CS        GPIO_11
-#define AT86RF231_INT       GPIO_12
-#define AT86RF231_RESET     GPIO_13
-#define AT86RF231_SLEEP     GPIO_14
+#define AT86RF231_CS        GPIO_PIN(PORT_A,1)
+#define AT86RF231_INT       GPIO_PIN(PORT_C,2)
+#define AT86RF231_RESET     GPIO_PIN(PORT_C,1)
+#define AT86RF231_SLEEP     GPIO_PIN(PORT_A,0)
 /** @} */
 
 /**
@@ -77,8 +72,8 @@ extern "C" {
  */
 #define L3G4200D_I2C        I2C_0
 #define L3G4200D_ADDR       0x68
-#define L3G4200D_DRDY       GPIO_2
-#define L3G4200D_INT        GPIO_1
+#define L3G4200D_DRDY       GPIO_PIN(PORT_B,8)
+#define L3G4200D_INT        GPIO_PIN(PORT_B,11)
 /** @} */
 
 /**
@@ -88,9 +83,9 @@ extern "C" {
 #define LSM303DLHC_I2C      I2C_0
 #define LSM303DLHC_ACC_ADDR (25)
 #define LSM303DLHC_MAG_ADDR (30)
-#define LSM303DLHC_INT1     GPIO_4
-#define LSM303DLHC_INT2     GPIO_3
-#define LSM303DLHC_DRDY     GPIO_9
+#define LSM303DLHC_INT1     GPIO_PIN(PORT_B,9)
+#define LSM303DLHC_INT2     GPIO_PIN(PORT_B,5)
+#define LSM303DLHC_DRDY     GPIO_PIN(PORT_A,9)
 /** @} */
 
 /**
@@ -99,8 +94,10 @@ extern "C" {
  */
 #define LED_RED_PORT        (GPIOB)
 #define LED_RED_PIN         (10)
+#define LED_RED_GPIO        GPIO_PIN(PORT_B,10)
 #define LED_GREEN_PORT      (GPIOB)
 #define LED_GREEN_PIN       (12)
+#define LED_GREEN_GPIO      GPIO_PIN(PORT_B,12)
 /** @} */
 
 /**
@@ -119,11 +116,6 @@ extern "C" {
 #define LED_ORANGE_OFF
 #define LED_ORANGE_TOGGLE
 /** @} */
-
-/**
- * Define the type for the radio packet length for the transceiver
- */
-typedef uint8_t radio_packet_length_t;
 
 /**
  * @brief Initialize board specific hardware, including clock, LEDs and std-IO

@@ -13,7 +13,7 @@
  * @ingroup     boards_z1
  * @{
  *
- * @file        board.c
+ * @file
  * @brief       Board specific implementations for the Zolertia Z1
  *
  * @author      Kévin Roussel <Kevin.Roussel@inria.fr>
@@ -24,9 +24,7 @@
 
 #include "cpu.h"
 #include "board.h"
-
-void uart_init(void);
-
+#include "uart_stdio.h"
 
 static void z1_ports_init(void)
 {
@@ -217,8 +215,8 @@ void board_init(void)
     /* initializes DCO */
     msp430_init_dco();
 
-    /* initialize UART/USB module */
-    uart_init();
+    /* initialize STDIO */
+    uart_stdio_init();
 
     /* enable interrupts */
     __bis_SR_register(GIE);

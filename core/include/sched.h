@@ -71,7 +71,7 @@
  *
  * @{
  *
- * @file        sched.h
+ * @file
  * @brief       Scheduler API definition
  *
  * @author      Kaspar Schleiser <kaspar@schleiser.de>
@@ -85,6 +85,7 @@
 #include "tcb.h"
 #include "attributes.h"
 #include "kernel_types.h"
+#include "native_sched.h"
 
 #ifdef __cplusplus
  extern "C" {
@@ -163,7 +164,7 @@ extern volatile kernel_pid_t sched_active_pid;
  */
 extern clist_node_t *sched_runqueues[SCHED_PRIO_LEVELS];
 
-#if SCHEDSTATISTICS
+#ifdef MODULE_SCHEDSTATISTICS
 /**
  *  Scheduler statistics
  */
