@@ -95,7 +95,7 @@ extern "C" {
 #define UART_IRQ_PRIO       1
 
 /* UART pin configuration */
-#define UART_HWFLOWCTRL   1
+#define UART_HWFLOWCTRL   0
 #define UART_PIN_RX       11
 #define UART_PIN_TX       9
 #define UART_PIN_RTS      8
