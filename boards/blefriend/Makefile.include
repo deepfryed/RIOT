@@ -1,5 +1,5 @@
 # define the cpu used by the blefriend-nrf51822 board
-export CPU = nrf51822-ble
+export CPU = nrf51
 export CPU_MODEL = nrf51822qfaa
 
 #define the default port depending on the host OS
